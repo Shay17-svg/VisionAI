@@ -8,7 +8,10 @@ export default function PreviewScreen() {
 
   async function handleAnalyze(promptKey: string) {
     const base64Image = await imageToBase64(photoUri);
-    router.push({ pathname: "/result", params: { base64Image, promptKey } });
+    router.push({
+      pathname: "/result",
+      params: { base64Image, promptKey, photoUri },
+    });
   }
 
   return (
