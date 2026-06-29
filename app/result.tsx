@@ -9,21 +9,29 @@ import {
 } from "react-native";
 import { analyzeImage } from "../lib/gemini";
 
-const ANALYSIS_PROMPT = `
-Analyze this image. Identify:
-1. Objects - list the distinct physical objects you see
-2. Context - briefly describe the setting or scene
-3. Activities - what activity appears to be happening, if any
-4. Recommendations - one practical suggestion based on the scene
-
-Respond ONLY with valid JSON in this exact shape, no extra text:
+const PROMPTS: Record<string, string> = {
+  academic: `Act as a university professor. Looking at this image, provide an academic-style analysis. Respond ONLY with valid JSON, no extra text:
 {
   "objects": ["...", "..."],
   "context": "...",
   "activities": "...",
   "recommendations": "..."
-}
-`;
+}`,
+  safety: `Act as a workplace safety inspector. Looking at this image, identify any visible hazards, risks, or safety concerns. If none are visible, state that clearly. Respond ONLY with valid JSON, no extra text:
+{
+  "objects": ["...", "..."],
+  "context": "...",
+  "activities": "...",
+  "recommendations": "..."
+}`,
+  inventory: `Act as an asset management clerk. Looking at this image, list every visible physical asset as a clean inventory list. Respond ONLY with valid JSON, no extra text:
+{
+  "objects": ["...", "..."],
+  "context": "...",
+  "activities": "...",
+  "recommendations": "..."
+}`,
+};
 
 interface Analysis {
   objects: string[];
@@ -33,7 +41,10 @@ interface Analysis {
 }
 
 export default function ResultScreen() {
-  const { base64Image } = useLocalSearchParams<{ base64Image: string }>();
+  const { base64Image, promptKey } = useLocalSearchParams<{
+    base64Image: string;
+    promptKey: string;
+  }>();
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,18 +52,20 @@ export default function ResultScreen() {
   useEffect(() => {
     runAnalysis();
   }, []);
+
   async function runAnalysis() {
     setLoading(true);
     setError(null);
     try {
-      const result = await analyzeImage(base64Image, ANALYSIS_PROMPT);
-      console.log("Gemini response:", JSON.stringify(result));
+      const prompt = PROMPTS[promptKey] || PROMPTS.academic;
+      const result = await analyzeImage(base64Image, prompt);
+      console.log("Gemini raw:", JSON.stringify(result).substring(0, 300));
       const textPart = result?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!textPart) throw new Error("Empty response from Gemini");
       const cleaned = textPart.replace(/```json|```/g, "").trim();
       setAnalysis(JSON.parse(cleaned));
     } catch (err) {
-      console.log("Error:", err);
+      console.log("Error details:", JSON.stringify(err));
       setError("Could not analyze this image. Please try again.");
     } finally {
       setLoading(false);
@@ -80,6 +93,13 @@ export default function ResultScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      <Text style={styles.personaLabel}>
+        {promptKey === "academic"
+          ? "🎓 Academic Analysis"
+          : promptKey === "safety"
+            ? "⚠️ Safety Analysis"
+            : "📋 Inventory Analysis"}
+      </Text>
       <Text style={styles.sectionTitle}>Objects</Text>
       {analysis.objects.map((obj: string, i: number) => (
         <Text key={i} style={styles.listItem}>
@@ -99,6 +119,12 @@ export default function ResultScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, paddingTop: 60 },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  personaLabel: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#5B3FA3",
+  },
   loadingText: { marginTop: 12, color: "#5A6472" },
   errorText: { color: "#B3261E", textAlign: "center", fontSize: 16 },
   sectionTitle: {
